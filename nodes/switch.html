@@ -39,6 +39,18 @@
                     <option value="8">8 Channels</option>
                 </select>
             </div>
+            <div class="form-row">
+                <label for="node-input-supportPulseTime" style="width:70%">
+                    <input type="checkbox" id="node-input-supportPulseTime" style="display:inline-block; width:15px; vertical-align:baseline;">
+                    Support PulseTime parameter (in sec)
+                </label>
+            </div>
+            <div class="form-row">
+                <label for="node-input-countdownPolling" style="width:70%">
+                    <input type="number" id="node-input-countdownPolling" min="0" style="display:inline-block; width:45px; vertical-align:baseline;">
+                    Pulse contdown polling interval in sec (0 - disabled)
+                </label>
+            </div>
         </div>
         <div id="tasmota-advanced-tab" style="display:none">
             <div class="form-row">
@@ -132,8 +144,10 @@
       statPrefix: { value: "" },
       telePrefix: { value: "" },
       qos: { value: 1 },
-      retain: { value: false }
+      retain: { value: false },
       // node specific
+      supportPulseTime: { value: false },
+      countdownPolling: { value: 0 }
     },
     icon: "contrib-tasmota-switch.svg",
     paletteLabel: 'switch',
