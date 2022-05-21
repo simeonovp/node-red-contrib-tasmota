@@ -1,7 +1,7 @@
 {
   "name": "node-red-contrib-tasmota",
   "description": "Node-RED integration for Tasmota flashed devices",
-  "version": "0.9.9",
+  "version": "0.9.91",
   "license": "MIT",
   "author": "Dave Andreoli",
   "keywords": [
@@ -16,7 +16,8 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/davemds/node-red-contrib-tasmota.git"
+    "urlorg": "git+https://github.com/davemds/node-red-contrib-tasmota.git",
+    "url": "git+https://github.com/simeonovp/node-red-contrib-tasmota.git"
   },
   "scripts": {
     "test": "standard"
