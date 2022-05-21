@@ -44,11 +44,15 @@
                     <input type="checkbox" id="node-input-supportPulseTime" style="display:inline-block; width:15px; vertical-align:baseline;">
                     Support PulseTime parameter (in sec)
                 </label>
+                <label for="node-input-supportChangeTime" style="width:70%">
+                    <input type="checkbox" id="node-input-supportChangeTime" style="display:inline-block; width:15px; vertical-align:baseline;">
+                    Support last change time
+                </label>
             </div>
             <div class="form-row">
                 <label for="node-input-countdownPolling" style="width:70%">
                     <input type="number" id="node-input-countdownPolling" min="0" style="display:inline-block; width:45px; vertical-align:baseline;">
-                    Pulse contdown polling interval in sec (0 - disabled)
+                    Pulse contdown polling interval in sec (0: disabled)
                 </label>
             </div>
         </div>
@@ -147,6 +151,7 @@
       retain: { value: false },
       // node specific
       supportPulseTime: { value: false },
+      supportChangeTime: { value: false },
       countdownPolling: { value: 0 }
     },
     icon: "contrib-tasmota-switch.svg",

@@ -16,11 +16,20 @@ module.exports = function (RED) {
     constructor (userConfig) {
       super(userConfig, RED, SWITCH_DEFAULTS)
       this.cache = [] // switch status cache, es: [1=>'On', 2=>'Off']
+      this.polling = parseInt(this.config.countdownPolling | '0')
       this.swichCount = 0
+      this.timeouts = []
+      this.timers = []
+      this.supportChangeTime = userConfig.supportChangeTime
 
       // Subscribes to state change of all the switch  stat/<device>/+
       this.MQTTSubscribe('stat', '+', (topic, payload) => {
         this.onStat(topic, payload)
+      })
+
+      this.on('close', done => {
+        this.onClose()
+        done()
       })
     }
 
@@ -37,20 +46,25 @@ module.exports = function (RED) {
       }
     }
 
+    onClose() {
+      for(let idx in this.timers) if (this.timers[idx]) clearInterval(idx)
+    }
+
     onNodeInput (msg) {
       const payload = msg.payload
       const topic = msg.topic || 'switch1'
+      
       if (topic.toLowerCase().startsWith('timeout')) {
         if (!this.config.supportPulseTime) return
         const channel = this.extractChannelNum(topic)
-        const command = 'PulseTime' + channel
         if (payload) {
           const sec = parseInt(payload.toString())
           const value = (sec > 11) ? (sec + 100) : (sec * 10)
-          this.MQTTPublish('cmnd', command, value.toString())
+          //this.timeouts[channel - 1] = value
+          this.requestTimer(channel, value.toString())
         }
         else {
-          this.MQTTPublish('cmnd', command)
+          this.requestTimer(channel)
         }
         return
       }
@@ -88,14 +102,6 @@ module.exports = function (RED) {
       this.warn('Invalid payload received on input')
     }
 
-    parseSeconds(val) {
-      return (val > 110) ? (val - 100) : parseInt(val / 10);
-    }
-
-    requestTimer(idx) {
-      this.MQTTPublish('cmnd', 'PulseTime' + idx)
-    }
-
     onStat (mqttTopic, mqttPayloadBuf) {
       // last part of the topic must be POWER or POWERx (ignore any others)
       const lastTopic = mqttTopic.split('/').pop()
@@ -111,22 +117,20 @@ module.exports = function (RED) {
             if (PulseTime) {
               if (PulseTime.Set !== null) {
                 const sec = this.parseSeconds(PulseTime.Set)
-                this.send({topic: 'timeout' + channel, payload: sec})
+                if (this.timeouts[channel - 1] !== sec) {
+                  this.timeouts[channel - 1] = sec
+                  this.send({topic: 'timeout' + channel, payload: sec})
+                }
               }
-              const polling = parseInt(this.config.countdownPolling | '0')
-              if (polling) {
+              if (this.polling) {
                 if (PulseTime.Remaining !== null) {
                   const sec = this.parseSeconds(PulseTime.Remaining)
                   //this.send({topic: 'info', payload: 'sec=' + sec}) //sip--
-                  this.send({topic: 'countdown' + channel, payload: sec})
-                  if (sec) {
-                    setTimeout(()=>{ 
-                      this.requestTimer(channel)
-                    }, polling * 1000)
-                  }
+                  if(sec) this.send({topic: 'countdown' + channel, payload: sec})
+                  else if(this.timers[channel - 1]) this.stopTimer(channel)
                 }
               }
-              //this.send({topic: 'info', payload: polling + '(' + typeof polling + ')'}) //sip--
+              //this.send({topic: 'info', payload: this.polling + '(' + typeof this.polling + ')'}) //sip--
             }
           })
         }
@@ -136,8 +140,10 @@ module.exports = function (RED) {
       // check payload is valid
       const mqttPayload = mqttPayloadBuf.toString()
       let status
+      let isOn = false
       if (mqttPayload === onValue) {
         status = 'On'
+        isOn = true
       } else if (mqttPayload === offValue) {
         status = 'Off'
       } else {
@@ -148,11 +154,18 @@ module.exports = function (RED) {
       const channel = this.extractChannelNum(lastTopic)
       this.cache[channel - 1] = status
 
+      if (this.config.supportPulseTime) {
+        if (!isOn) this.stopTimer(channel)
+        else if (!this.timers[channel - 1]) this.startTimer(channel)
+      }
+
       // update status icon and label
       this.setNodeStatus(this.cache[0] === 'On' ? 'green' : 'grey', this.cache.join(' - '))
 
       // build and send the new boolen message for topic 'switchX'
-      const msg = { topic: 'switch' + channel, payload: (status === 'On') }
+      let msg = { topic: 'switch' + channel, payload: isOn }
+      if (this.supportChangeTime) msg.time = new Date().toLocaleString()
+
       if (this.config.outputs === 1 || this.config.outputs === '1') {
         // everything to the same (single) output
         this.send(msg)
@@ -173,9 +186,30 @@ module.exports = function (RED) {
         }
         this.swichCount = channel
       }
-      else if ((this.config.countdownPolling !== '0') && (status === 'On')) {
+    }
+
+    parseSeconds(val) {
+      return (val > 110) ? (val - 100) : parseInt(val / 10);
+    }
+
+    requestTimer(channel, val) {
+      this.MQTTPublish('cmnd', 'PulseTime' + channel, val)
+    }
+
+    startTimer(channel) {
+      if (!this.polling && !this.timeouts[channel - 1]) return;
+      if (this.timers[channel - 1]) this.clearInterval(this.timers[channel - 1])
+      this.timers[channel - 1] = setInterval(()=>{ 
         this.requestTimer(channel)
+      }, this.polling * 1000);
+    }
+
+    stopTimer(channel) {
+      if (this.timers[channel - 1]) {
+        clearInterval(this.timers[channel - 1])
+        this.timers[channel - 1] = null
       }
+      this.send({topic: 'countdown' + channel, payload: 0})
     }
   }
 
