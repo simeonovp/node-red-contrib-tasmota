@@ -197,7 +197,7 @@ module.exports = function (RED) {
     }
 
     startTimer(channel) {
-      if (!this.polling && !this.timeouts[channel - 1]) return;
+      if (!this.polling || !this.timeouts[channel - 1]) return;
       if (this.timers[channel - 1]) this.clearInterval(this.timers[channel - 1])
       this.timers[channel - 1] = setInterval(()=>{ 
         this.requestTimer(channel)
@@ -211,6 +211,21 @@ module.exports = function (RED) {
       }
       this.send({topic: 'countdown' + channel, payload: 0})
     }
+
+    //TODO Timers
+    // Switch itT_T1_11_timers (grpTimers)
+    //    {mqtt=">[sihabro:tasmota/t1_11/cmnd/Timers:command:*:default]"}
+      //if (itT_T1_11_timers.state == NULL) publish("sihabro", "tasmota/t1_11/cmnd/Timers", "")
+    // Item itT_T1_11_result changed
+    // then
+    //   val String json = triggeringItem.state.toString
+    //   if (json.startsWith("{\"Timers\"")) {
+    //     val String timers = transform("JSONPATH", "$.Timers", json)
+    //     itT_T1_11_timers.postUpdate(timers)
+    //     logInfo("Rollade Dach result received", "Timers: " + timers)
+    //   }
+    // end  
+    // Switch item=itT_T1_11_timers label="Rolladen Automatic" icon="rollershutter"
   }
 
   RED.nodes.registerType('Tasmota Switch', TasmotaSwitchNode)
