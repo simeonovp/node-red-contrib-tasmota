@@ -48,6 +48,10 @@
                     <input type="checkbox" id="node-input-supportChangeTime" style="display:inline-block; width:15px; vertical-align:baseline;">
                     Support last change time
                 </label>
+                <label for="node-input-sendDevice" style="width:70%">
+                    <input type="checkbox" id="node-input-sendDevice" style="display:inline-block; width:15px; vertical-align:baseline;">
+                    Send device name
+                </label>
             </div>
             <div class="form-row">
                 <label for="node-input-countdownPolling" style="width:70%">
@@ -152,6 +156,7 @@
       // node specific
       supportPulseTime: { value: false },
       supportChangeTime: { value: false },
+      sendDevice: { value: false },
       countdownPolling: { value: 0 }
     },
     icon: "contrib-tasmota-switch.svg",

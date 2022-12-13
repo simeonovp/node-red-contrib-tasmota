@@ -21,6 +21,7 @@ module.exports = function (RED) {
       this.timeouts = []
       this.timers = []
       this.supportChangeTime = userConfig.supportChangeTime
+      this.sendDevice = userConfig.sendDevice
 
       // Subscribes to state change of all the switch  stat/<device>/+
       this.MQTTSubscribe('stat', '+', (topic, payload) => {
@@ -54,6 +55,8 @@ module.exports = function (RED) {
       const payload = msg.payload
       const topic = msg.topic || 'switch1'
       
+      if (this.config.device === msg && msg.device) return
+
       if (topic.toLowerCase().startsWith('timeout')) {
         if (!this.config.supportPulseTime) return
         const channel = this.extractChannelNum(topic)
@@ -164,6 +167,7 @@ module.exports = function (RED) {
 
       // build and send the new boolen message for topic 'switchX'
       let msg = { topic: 'switch' + channel, payload: isOn }
+      if (this.sendDevice) msg.device = this.config.device
       if (this.supportChangeTime) msg.time = new Date().toLocaleString()
 
       if (this.config.outputs === 1 || this.config.outputs === '1') {
