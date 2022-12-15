@@ -55,8 +55,12 @@
             </div>
             <div class="form-row">
                 <label for="node-input-countdownPolling" style="width:70%">
-                    <input type="number" id="node-input-countdownPolling" min="0" style="display:inline-block; width:45px; vertical-align:baseline;">
+                    <input type="number" id="node-input-countdownPolling" min="0" style="display:inline-block; width:100px; vertical-align:baseline;">
                     Pulse contdown polling interval in sec (0: disabled)
+                </label>
+                <label for="node-input-debounce" style="width:70%">
+                    <input type="number" id="node-input-debounce" min="0" style="display:inline-block; width:200px; vertical-align:baseline;">
+                    Switch debounce time in msec (0: disabled)
                 </label>
             </div>
         </div>
@@ -157,7 +161,8 @@
       supportPulseTime: { value: false },
       supportChangeTime: { value: false },
       sendDevice: { value: false },
-      countdownPolling: { value: 0 }
+      countdownPolling: { value: 0 },
+      debounce: { value: 1000 }
     },
     icon: "contrib-tasmota-switch.svg",
     paletteLabel: 'switch',
@@ -185,6 +190,7 @@
         id: "tasmota-advanced-tab",
         label: "Advanced"
       })
+      if (!this.debounce) $('#node-input-debounce').val('1000');
     }
   })
 </script>

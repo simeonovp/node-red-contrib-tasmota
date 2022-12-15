@@ -16,12 +16,16 @@ module.exports = function (RED) {
     constructor (userConfig) {
       super(userConfig, RED, SWITCH_DEFAULTS)
       this.cache = [] // switch status cache, es: [1=>'On', 2=>'Off']
-      this.polling = parseInt(this.config.countdownPolling | '0')
+      this.polling = this.config.supportPulseTime && this.config.countdownPolling && parseInt(this.config.countdownPolling) || 0
       this.swichCount = 0
       this.timeouts = []
       this.timers = []
       this.supportChangeTime = userConfig.supportChangeTime
       this.sendDevice = userConfig.sendDevice
+      
+      this.debounce = this.config.debounce && parseInt(this.config.debounce) || 1000
+      this.lastTime = []
+      this.debTimer = []
 
       // Subscribes to state change of all the switch  stat/<device>/+
       this.MQTTSubscribe('stat', '+', (topic, payload) => {
@@ -102,7 +106,7 @@ module.exports = function (RED) {
         }
       }
 
-      this.warn('Invalid payload received on input')
+      this.warn('Invalid payload received on input' + JSON.stringify(msg))
     }
 
     onStat (mqttTopic, mqttPayloadBuf) {
@@ -122,14 +126,14 @@ module.exports = function (RED) {
                 const sec = this.parseSeconds(PulseTime.Set)
                 if (this.timeouts[channel - 1] !== sec) {
                   this.timeouts[channel - 1] = sec
-                  this.send({topic: 'timeout' + channel, payload: sec})
+                  this.sendChannel({topic: 'timeout' + channel, payload: sec}, channel)
                 }
               }
               if (this.polling) {
                 if (PulseTime.Remaining !== null) {
                   const sec = this.parseSeconds(PulseTime.Remaining)
                   //this.send({topic: 'info', payload: 'sec=' + sec}) //sip--
-                  if(sec) this.send({topic: 'countdown' + channel, payload: sec})
+                  if(sec) this.sendChannel({topic: 'countdown' + channel, payload: sec}, channel)
                   else if(this.timers[channel - 1]) this.stopTimer(channel)
                 }
               }
@@ -155,11 +159,12 @@ module.exports = function (RED) {
 
       // extract channel number and save in cache
       const channel = this.extractChannelNum(lastTopic)
-      this.cache[channel - 1] = status
+      const idx = channel - 1
+      this.cache[idx] = status
 
       if (this.config.supportPulseTime) {
         if (!isOn) this.stopTimer(channel)
-        else if (!this.timers[channel - 1]) this.startTimer(channel)
+        else if (!this.timers[idx]) this.startTimer(channel)
       }
 
       // update status icon and label
@@ -170,15 +175,27 @@ module.exports = function (RED) {
       if (this.sendDevice) msg.device = this.config.device
       if (this.supportChangeTime) msg.time = new Date().toLocaleString()
 
-      if (this.config.outputs === 1 || this.config.outputs === '1') {
-        // everything to the same (single) output
-        this.send(msg)
-      } else {
-        // or send to the correct output
-        const msgList = Array(this.config.outputs).fill(null)
-        msgList[channel - 1] = msg
-        this.send(msgList)
+      if (this.debounce) {
+        try {
+        const timestamp = Date.now()
+        const diff = (timestamp - this.lastTime[idx])
+        if (diff > this.debounce) {
+          this.lastTime[idx] = timestamp
+          this.sendChannel(msg, channel)
+        }
+        else if (!this.debTimer[idx]) {
+          this.debTimer[idx] = setTimeout(()=>{ 
+            clearTimeout[this.debTimer[idx]]
+            this.debTimer[idx] = null
+            this.lastTime[idx] = Date.now()
+            this.sendChannel({ topic: 'switch' + channel, payload: (this.cache[idx] === 'On') }, channel)
+          }, this.debounce - diff)
+        }
+        } catch(e) {
+          this.warn('Debounce exeption' + e)
+        }
       }
+      else this.sendChannel(msg, channel)
 
       if (channel > this.swichCount) {
         // Tamota not supports command PulseTime0 similar to POWER0
@@ -192,6 +209,18 @@ module.exports = function (RED) {
       }
     }
 
+    sendChannel(msg, channel) {
+      if (this.config.outputs === 1 || this.config.outputs === '1') {
+        // everything to the same (single) output
+        this.send(msg)
+      } else {
+        // or send to the correct output
+        const msgList = Array(this.config.outputs).fill(null)
+        msgList[channel - 1] = msg
+        this.send(msgList)
+      }
+    }
+
     parseSeconds(val) {
       return (val > 110) ? (val - 100) : parseInt(val / 10);
     }
@@ -201,7 +230,7 @@ module.exports = function (RED) {
     }
 
     startTimer(channel) {
-      if (!this.polling || !this.timeouts[channel - 1]) return;
+      if (!this.config.supportPulseTime || !this.polling || !this.timeouts[channel - 1]) return;
       if (this.timers[channel - 1]) this.clearInterval(this.timers[channel - 1])
       this.timers[channel - 1] = setInterval(()=>{ 
         this.requestTimer(channel)
@@ -213,7 +242,7 @@ module.exports = function (RED) {
         clearInterval(this.timers[channel - 1])
         this.timers[channel - 1] = null
       }
-      this.send({topic: 'countdown' + channel, payload: 0})
+      this.sendChannel({topic: 'countdown' + channel, payload: 0}, channel)
     }
 
     //TODO Timers
