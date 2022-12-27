@@ -3,7 +3,8 @@ module.exports = function (RED) {
   const BaseTasmotaNode = require('./base_tasmota.js')
 
   const SWITCH_DEFAULTS = {
-    // no specific options for this node
+    supportPulseTime: false,
+    countdownPolling: '0'
   }
 
   // values for the tasmota POWER command
@@ -15,21 +16,65 @@ module.exports = function (RED) {
     constructor (userConfig) {
       super(userConfig, RED, SWITCH_DEFAULTS)
       this.cache = [] // switch status cache, es: [1=>'On', 2=>'Off']
+      this.polling = this.config.supportPulseTime && this.config.countdownPolling && parseInt(this.config.countdownPolling) || 0
+      this.swichCount = 0
+      this.timeouts = []
+      this.timers = []
+      this.supportChangeTime = userConfig.supportChangeTime
+      this.sendDevice = userConfig.sendDevice
+      
+      this.debounce = this.config.debounce && parseInt(this.config.debounce) || 1000
+      this.lastTime = []
+      this.debTimer = []
 
       // Subscribes to state change of all the switch  stat/<device>/+
       this.MQTTSubscribe('stat', '+', (topic, payload) => {
         this.onStat(topic, payload)
+      })
+
+      this.on('close', done => {
+        this.onClose()
+        done()
       })
     }
 
     onDeviceOnline () {
       // Publish a start command to get the state of all the switches
       this.MQTTPublish('cmnd', 'POWER0')
+      this.swichCount = 0
+      if (this.config.supportPulseTime) {
+        // supportPulseTime is possible only in single output mode
+        if (this.config.outputs !== 1 && this.config.outputs !== '1') {
+          this.config.supportPulseTime = false
+          return
+        }
+      }
+    }
+
+    onClose() {
+      for(let idx in this.timers) if (this.timers[idx]) clearInterval(idx)
     }
 
     onNodeInput (msg) {
       const payload = msg.payload
       const topic = msg.topic || 'switch1'
+      
+      if (this.config.device === msg && msg.device) return
+
+      if (topic.toLowerCase().startsWith('timeout')) {
+        if (!this.config.supportPulseTime) return
+        const channel = this.extractChannelNum(topic)
+        if (payload) {
+          const sec = parseInt(payload.toString())
+          const value = (sec > 11) ? (sec + 100) : (sec * 10)
+          //this.timeouts[channel - 1] = value
+          this.requestTimer(channel, value.toString())
+        }
+        else {
+          this.requestTimer(channel)
+        }
+        return
+      }
 
       const channel = topic.toLowerCase().startsWith('switch') ? this.extractChannelNum(topic) : 1
       const command = 'POWER' + channel
@@ -61,21 +106,51 @@ module.exports = function (RED) {
         }
       }
 
-      this.warn('Invalid payload received on input')
+      this.warn('Invalid payload received on input' + JSON.stringify(msg))
     }
 
     onStat (mqttTopic, mqttPayloadBuf) {
       // last part of the topic must be POWER or POWERx (ignore any others)
       const lastTopic = mqttTopic.split('/').pop()
       if (!lastTopic.startsWith('POWER')) {
+        if (this.config.supportPulseTime) {
+          if (lastTopic !== 'RESULT') return
+          const result = JSON.parse(mqttPayloadBuf.toString())
+          if (!result) return
+          Object.keys(result).forEach(key => {
+            if (!key.startsWith('PulseTime')) return
+            const channel = this.extractChannelNum(key)
+            const PulseTime = result[key]
+            if (PulseTime) {
+              if (PulseTime.Set !== null) {
+                const sec = this.parseSeconds(PulseTime.Set)
+                if (this.timeouts[channel - 1] !== sec) {
+                  this.timeouts[channel - 1] = sec
+                  this.sendChannel({topic: 'timeout' + channel, payload: sec}, channel)
+                }
+              }
+              if (this.polling) {
+                if (PulseTime.Remaining !== null) {
+                  const sec = this.parseSeconds(PulseTime.Remaining)
+                  //this.send({topic: 'info', payload: 'sec=' + sec}) //sip--
+                  if(sec) this.sendChannel({topic: 'countdown' + channel, payload: sec}, channel)
+                  else if(this.timers[channel - 1]) this.stopTimer(channel)
+                }
+              }
+              //this.send({topic: 'info', payload: this.polling + '(' + typeof this.polling + ')'}) //sip--
+            }
+          })
+        }
         return
       }
 
       // check payload is valid
       const mqttPayload = mqttPayloadBuf.toString()
       let status
+      let isOn = false
       if (mqttPayload === onValue) {
         status = 'On'
+        isOn = true
       } else if (mqttPayload === offValue) {
         status = 'Off'
       } else {
@@ -84,13 +159,57 @@ module.exports = function (RED) {
 
       // extract channel number and save in cache
       const channel = this.extractChannelNum(lastTopic)
-      this.cache[channel - 1] = status
+      const idx = channel - 1
+      this.cache[idx] = status
+
+      if (this.config.supportPulseTime) {
+        if (!isOn) this.stopTimer(channel)
+        else if (!this.timers[idx]) this.startTimer(channel)
+      }
 
       // update status icon and label
       this.setNodeStatus(this.cache[0] === 'On' ? 'green' : 'grey', this.cache.join(' - '))
 
       // build and send the new boolen message for topic 'switchX'
-      const msg = { topic: 'switch' + channel, payload: (status === 'On') }
+      let msg = { topic: 'switch' + channel, payload: isOn }
+      if (this.sendDevice) msg.device = this.config.device
+      if (this.supportChangeTime) msg.time = new Date().toLocaleString()
+
+      if (this.debounce) {
+        try {
+        const timestamp = Date.now()
+        const diff = (timestamp - this.lastTime[idx])
+        if (diff > this.debounce) {
+          this.lastTime[idx] = timestamp
+          this.sendChannel(msg, channel)
+        }
+        else if (!this.debTimer[idx]) {
+          this.debTimer[idx] = setTimeout(()=>{ 
+            clearTimeout[this.debTimer[idx]]
+            this.debTimer[idx] = null
+            this.lastTime[idx] = Date.now()
+            this.sendChannel({ topic: 'switch' + channel, payload: (this.cache[idx] === 'On') }, channel)
+          }, this.debounce - diff)
+        }
+        } catch(e) {
+          this.warn('Debounce exeption' + e)
+        }
+      }
+      else this.sendChannel(msg, channel)
+
+      if (channel > this.swichCount) {
+        // Tamota not supports command PulseTime0 similar to POWER0
+        // use auto recognation instead
+        if (this.config.supportPulseTime) {
+          for (let i = this.swichCount + 1; i <= channel; i++) {
+            this.requestTimer(i)
+          }
+        }
+        this.swichCount = channel
+      }
+    }
+
+    sendChannel(msg, channel) {
       if (this.config.outputs === 1 || this.config.outputs === '1') {
         // everything to the same (single) output
         this.send(msg)
@@ -101,6 +220,45 @@ module.exports = function (RED) {
         this.send(msgList)
       }
     }
+
+    parseSeconds(val) {
+      return (val > 110) ? (val - 100) : parseInt(val / 10);
+    }
+
+    requestTimer(channel, val) {
+      this.MQTTPublish('cmnd', 'PulseTime' + channel, val)
+    }
+
+    startTimer(channel) {
+      if (!this.config.supportPulseTime || !this.polling || !this.timeouts[channel - 1]) return;
+      if (this.timers[channel - 1]) this.clearInterval(this.timers[channel - 1])
+      this.timers[channel - 1] = setInterval(()=>{ 
+        this.requestTimer(channel)
+      }, this.polling * 1000);
+    }
+
+    stopTimer(channel) {
+      if (this.timers[channel - 1]) {
+        clearInterval(this.timers[channel - 1])
+        this.timers[channel - 1] = null
+      }
+      this.sendChannel({topic: 'countdown' + channel, payload: 0}, channel)
+    }
+
+    //TODO Timers
+    // Switch itT_T1_11_timers (grpTimers)
+    //    {mqtt=">[sihabro:tasmota/t1_11/cmnd/Timers:command:*:default]"}
+      //if (itT_T1_11_timers.state == NULL) publish("sihabro", "tasmota/t1_11/cmnd/Timers", "")
+    // Item itT_T1_11_result changed
+    // then
+    //   val String json = triggeringItem.state.toString
+    //   if (json.startsWith("{\"Timers\"")) {
+    //     val String timers = transform("JSONPATH", "$.Timers", json)
+    //     itT_T1_11_timers.postUpdate(timers)
+    //     logInfo("Rollade Dach result received", "Timers: " + timers)
+    //   }
+    // end  
+    // Switch item=itT_T1_11_timers label="Rolladen Automatic" icon="rollershutter"
   }
 
   RED.nodes.registerType('Tasmota Switch', TasmotaSwitchNode)

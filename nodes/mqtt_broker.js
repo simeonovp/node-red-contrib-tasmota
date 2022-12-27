@@ -24,7 +24,27 @@ module.exports = function (RED) {
       this.connected = false
       this.users = {}
       this.subscriptions = {}
+      this.config = config
 
+      this.client = undefined
+
+      // ConfigNode is shutting down, close the mqtt connection
+      this.on('close', (done) => {
+        if (!this.client) return
+        if (this.connected) {
+          this.client.end(done)
+        } else {
+          this.client.end()
+          done()
+        }
+      })
+
+      this._connect() //sip-- ???
+    }
+
+    _connect() {
+      //this.log('-- _connect ')
+      const config = this.config
       // Non-clean sessions need a fixed ClientID
       let cleansession = config.cleansession
       if (!cleansession && !config.clientid) {
@@ -104,6 +124,7 @@ module.exports = function (RED) {
 
         // MQTT.js has received a messagge (dispatch to matching subscribers only)
         this.client.on('message', (mtopic, mpayload, mpacket) => {
+          //this.log('-- on message ' + mtopic)
           for (const subscribedTopic in this.subscriptions) {
             if (Object.prototype.hasOwnProperty.call(this.subscriptions, subscribedTopic)) {
               if (matchTopic(subscribedTopic, mtopic)) {
@@ -141,32 +162,27 @@ module.exports = function (RED) {
       } catch (err) {
         this.error(err)
       }
-
-      // ConfigNode is shutting down, close the mqtt connection
-      this.on('close', (done) => {
-        if (this.connected) {
-          this.client.end(done)
-        } else {
-          this.client.end()
-          done()
-        }
-      })
     }
 
     /* Register a new TasmotaNode */
-    register (tasmotaNode) {
-      this.users[tasmotaNode.id] = tasmotaNode
+    register (deviceNode) {
+      this.log('-- register ' + deviceNode.type)
+      //if (!Object.keys(this.users).length) this._connect()
+      if (!this.client) this._connect()
+      this.users[deviceNode.id] = deviceNode
     }
 
     /* DeRegister a previously registered TasmotaNode */
-    deregister (tasmotaNode) {
-      delete this.users[tasmotaNode.id]
+    deregister (deviceNode) {
+      this.log('-- deregister ' + deviceNode.type)
+      delete this.users[deviceNode.id]
     }
 
     /* Subscribe to the given topic, cb will be fired only for matching topics */
-    subscribe (tasmotaNode, topic, qos, callback) {
+    subscribe (deviceNode, topic, qos, callback) {
       this.subscriptions[topic] = this.subscriptions[topic] || {}
-      this.subscriptions[topic][tasmotaNode.id] = callback
+      this.subscriptions[topic][deviceNode.id] = callback
+      this.log('-- subscribe ' + topic + ', nodeId:' + (deviceNode.config.name || deviceNode.id) + ', qos:' + qos + ', typeof qos:' + typeof qos)
       this.client.subscribe(topic, { qos: qos })
     }
 
