@@ -1,0 +1,129 @@
+<script type="text/html" data-template-name="tasmota-device">
+    <div class="form-row">
+        <ul id="node-config-input-tasmota-tabs"></ul>
+    </div>
+    <div id="node-config-input-tabs-content">
+        <div id="tasmota-settings-tab" style="display:none">
+            <div class="form-row">
+                <label for="node-config-input-broker"><i class="fa fa-globe"></i> Broker</label>
+                <input type="text" id="node-config-input-broker">
+            </div>
+            <div class="form-row">
+                <label for="node-config-input-device"><i class="fa fa-dot-circle-o"></i> Device</label>
+                <input type="text" id="node-config-input-device" placeholder="Device id (topic)">
+            </div>
+            <div class="form-row">
+                <label for="node-config-input-name"><i class="fa fa-tag"></i> Name</label>
+                <input type="text" id="node-config-input-name" placeholder="Name">
+            </div>
+        </div>
+        <div id="tasmota-advanced-tab" style="display:none">
+            <div class="form-row">
+                <label for="node-config-input-fullTopic"><i class="fa fa-wrench"></i> Full topic</label>
+                <input type="text" id="node-config-input-fullTopic" placeholder="Full topic (Default: %prefix%/%topic%/)">
+            </div>
+            <div class="form-row">
+                <label for="node-config-input-cmndPrefix"><i class="fa fa-comment"></i> cmnd</label>
+                <input type="text" id="node-config-input-cmndPrefix" placeholder="Command topic prefix (Default: cmnd)">
+            </div>
+            <div class="form-row">
+                <label for="node-config-input-statPrefix"><i class="fa fa-comment"></i> stat</label>
+                <input type="text" id="node-config-input-statPrefix" placeholder="Stat topic prefix (Default: stat)">
+            </div>
+            <div class="form-row">
+                <label for="node-config-input-telePrefix"><i class="fa fa-comment"></i> tele</label>
+                <input type="text" id="node-config-input-telePrefix" placeholder="Telemetry topic prefix (Default: tele)">
+            </div>
+            <div class="form-row">
+                <label for="node-config-input-qos"><i class="fa fa-empire"></i> QoS</label>
+                <select id="node-config-input-qos" style="width:120px !important">
+                    <option value="" selected disabled hidden>1</option>
+                    <option value="0">0</option>
+                    <option value="1">1</option>
+                    <option value="2">2</option>
+                </select>
+                &nbsp;&nbsp;<i class="fa fa-history"></i>&nbsp;Retain &nbsp;
+                <select id="node-config-input-retain" style="width:120px !important">
+                    <option value="" selected disabled hidden>false</option>
+                    <option value="false">false</option>
+                    <option value="true">true</option>
+                </select>
+            </div>
+        </div>
+    </div>
+</script>
+
+<script type="text/html" data-help-name="tasmota-device">
+    <p>A generic proxy to control any device running the <b>Tasmota</b> firmware.</p>
+
+    <h3>Input</h3>
+    <p>Three input formats are supported: string, list and object:</p>
+    <dl class="message-properties">
+        <dt>payload <span class="property-type">string</span></dt>
+        <dd>CMD &lt;param&gt;</dd>
+        <dt>payload <span class="property-type">list</span></dt>
+        <dd>["CMD &lt;param&gt;", "CMD &lt;param&gt;", ...]</dd>
+        <dt>payload <span class="property-type">object</span></dt>
+        <dd>{"CMD": "param", "CMD": "param", ...}</dd>
+    </dl>
+    <p>CMD can be any valid tasmota command and param is specific for each command. Refer to the
+       official Tasmota <a href="https://tasmota.github.io/docs/Commands/">documentation</a> for
+       the full commands reference.</p>
+    <p>Note that the object format does not guarantee the order of delivered messagges,
+       thus if commands order is important you must use the list format.</p>
+
+    <h3>Output</h3>
+    <dl class="message-properties">
+       <dt>payload <span class="property-type">string</span></dt>
+       <dd>the MQTT payload as sent by the device</dd>
+       <dt>topic <span class="property-type">string</span></dt>
+       <dd>the MQTT topic as sent by the device</dd>
+    </dl>
+
+    <h3>Details</h3>
+    <p>This is a Tasmota node proxy.</p>
+</script>
+
+<script type="text/javascript">
+  RED.nodes.registerType("tasmota-device", {
+    category: "config",
+    defaults: {
+      // common basic
+      broker: { type: "tasmota-mqtt-broker", required: true },
+      device: { value: "", required: true },
+      name: { value: "" },
+      outputs: { value: 1 },
+      fullTopic: { value: "" },
+      cmndPrefix: { value: "" },
+      statPrefix: { value: "" },
+      telePrefix: { value: "" },
+      qos: { value: 1 },
+      retain: { value: false },
+    },
+    label: function() {
+      return this.name || this.device || "Tasmota Devce"
+    },
+    oneditprepare: function () {
+      const tabs = RED.tabs.create({
+        id: "node-config-input-tasmota-tabs",
+        onchange: function (tab) {
+          $("#node-config-input-tabs-content").children().hide()
+          $("#" + tab.id).show()
+        }
+      })
+      tabs.addTab({
+        id: "tasmota-settings-tab",
+        label: "Settings"
+      })
+      tabs.addTab({
+        id: "tasmota-advanced-tab",
+        label: "Advanced"
+      })
+      const updateName = () => {
+        if (!this.name) $('#node-config-input-name').val($('#node-config-input-device').val())
+      }
+      updateName()
+      $("#node-input-device").on("change", updateName)
+    }
+  })
+</script>

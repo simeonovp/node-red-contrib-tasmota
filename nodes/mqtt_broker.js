@@ -43,7 +43,6 @@ module.exports = function (RED) {
     }
 
     _connect() {
-      //this.log('-- _connect ')
       const config = this.config
       // Non-clean sessions need a fixed ClientID
       let cleansession = config.cleansession
@@ -124,7 +123,6 @@ module.exports = function (RED) {
 
         // MQTT.js has received a messagge (dispatch to matching subscribers only)
         this.client.on('message', (mtopic, mpayload, mpacket) => {
-          //this.log('-- on message ' + mtopic)
           for (const subscribedTopic in this.subscriptions) {
             if (Object.prototype.hasOwnProperty.call(this.subscriptions, subscribedTopic)) {
               if (matchTopic(subscribedTopic, mtopic)) {
@@ -166,7 +164,6 @@ module.exports = function (RED) {
 
     /* Register a new TasmotaNode */
     register (deviceNode) {
-      this.log('-- register ' + deviceNode.type)
       //if (!Object.keys(this.users).length) this._connect()
       if (!this.client) this._connect()
       this.users[deviceNode.id] = deviceNode
@@ -174,7 +171,6 @@ module.exports = function (RED) {
 
     /* DeRegister a previously registered TasmotaNode */
     deregister (deviceNode) {
-      this.log('-- deregister ' + deviceNode.type)
       delete this.users[deviceNode.id]
     }
 
@@ -182,7 +178,6 @@ module.exports = function (RED) {
     subscribe (deviceNode, topic, qos, callback) {
       this.subscriptions[topic] = this.subscriptions[topic] || {}
       this.subscriptions[topic][deviceNode.id] = callback
-      this.log('-- subscribe ' + topic + ', nodeId:' + (deviceNode.config.name || deviceNode.id) + ', qos:' + qos + ', typeof qos:' + typeof qos)
       this.client.subscribe(topic, { qos: qos })
     }
 
