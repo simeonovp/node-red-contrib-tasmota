@@ -167,6 +167,7 @@ class TasmotaBase {
   setNodeStatus (fill, text, shape) {
     const isOnline = this.deviceNode && this.deviceNode.isOnline
     if (isOnline) {
+      text = this.deviceNode.ap && `${text}(${this.deviceNode.ap})` || text
       this.status({
         fill: fill,
         text: text,
