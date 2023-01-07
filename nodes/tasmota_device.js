@@ -1,7 +1,4 @@
-const { info } = require('console')
-const fsFileLister = require('node-red-contrib-fs')
 const { emit } = require('process')
-const { runInThisContext } = require('vm')
 const path = require('path')
 const fs = require('fs')
 const request = require('request')
@@ -9,7 +6,6 @@ const spawn = require("child_process").spawn;
 
 module.exports = function (RED) {
   'use strict'
-  const TasmotaConfig = require('./tasmota_config.js')
 
   const CONFIG_DEFAULTS = {
     // basic
@@ -305,16 +301,17 @@ module.exports = function (RED) {
     }
 
     downloadConfig(force = false) {
+      //sip TODO
       //.node-red\projects\node-red-contrib-tasmota\resources\configs
-      const configDir = path.resolve(path.join(__dirname, '../resources/configs'))
-      const helper = new TasmotaConfig(this, configDir)
-      helper.downloadConfig(this.config.ip, this.config.device + '.json', force, err => {
-        if (!err) {
-        //   const config = helper.getConfg(ip)
-        //   this.log(JSON.stringify(config, null, 2))
-          if (this.manager) this.MQTTPublish('cmnd', 'STATUS', '11')
-        }
-      })
+      // const configDir = path.resolve(path.join(__dirname, '../resources/configs'))
+      // const helper = new TasmotaConfig(this, configDir)
+      // helper.downloadConfig(this.config.ip, this.config.device + '.json', force, err => {
+      //   if (!err) {
+      //   //   const config = helper.getConfg(ip)
+      //   //   this.log(JSON.stringify(config, null, 2))
+      //     if (this.manager) this.MQTTPublish('cmnd', 'STATUS', '11')
+      //   }
+      // })
     }
 
     status0() {
