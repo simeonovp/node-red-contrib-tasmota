@@ -47,6 +47,10 @@
               <label for="node-config-input-relais"><i class="fa fa-tag"></i> Relais</label>
               <input type="text" id="node-config-input-relais" readonly>
             </div>
+            <div class="form-row">
+              <label for="node-config-input-friendlynames"><i class="fa fa-tag"></i> Names</label>
+              <input type="text" id="node-config-input-friendlynames" readonly>
+            </div>
         </div>
         <div id="tasmota-mqtt-tab" style="display:none">
             <div class="form-row">
@@ -205,6 +209,7 @@
       version: { value: "" },
       module: { value: 0 },
       relais: { value: 0 },
+      friendlynames: { value: "" },
 
       fullTopic: { value: "" },
       cmndPrefix: { value: "" },
@@ -245,67 +250,67 @@
         $('#node-config-input-ip').text(this.ip || '')
         $("#node-config-input-ip").attr("href", this.ip && ("http://" + this.ip) || '')
         $('#node-config-input-host').val('')
-        $('#node-config-input-name').val(this.name || device)
         $('#node-config-input-version').val('')
         $('#node-config-input-module').val('0')
         $('#node-config-input-relais').val('0')
 
         //http://localhost:1880/resources/node-red-contrib-tasmota/configs/t1_02.json
-        const resp = get(`${configDir}/${device}.json`)
+        const resp = device && get(`${configDir}/${device}.json`)
         const config = resp && (resp[0] == '{') && JSON.parse(resp)
-        if (!config) return console.warn('Config not available')
-
-        if (config.friendlyname && (config.friendlyname.length > 0)) $('#node-config-input-name').val(config.friendlyname[0])
-        if (config.mqtt_host && brokerNodes[config.mqtt_host] && (this.broker !== brokerNodes[config.mqtt_host].id)) {
-          $('#node-config-input-broker').text(brokerNodes[config.mqtt_host].id)
-        }
-
-        // Tab Advanced
-        if (config.ip_address) $('#node-config-input-ip').text(config.ip_address[0])
-        if (config.hostname) $('#node-config-input-host').val(config.hostname)
-        if (config.version) $('#node-config-input-version').val(config.version)
-        //?? config.ntp_server
-        //?? config.ota_url
-        //?? config.pulse_timer
-        //?? config.timer
-
-        if (config.module) $('#node-config-input-module').val(config.module)
-        if (config.module === 255) {
-          const GPIO_REL1 = 7
-          const GPIO_REL1_INV = 8
-          const GPIO_REL1_BI = 271
-          const GPIO_REL1_BI_INV = 272
-          const GPIO_ANY = 32
-          const MAX_RELAYS = 8 // 28 for ESP32
-
-          const pinUsed = (gpio, index) => {
-            if (!config.user_template || !config.user_template.gpio) return
-            const gpio_any = (index >= GPIO_ANY)
-            const real_gpio = (gpio << 5) + gpio_any && index || 0
-            const mask = gpio_any && 0xFFE0 || 0xFFFF
-            return config.user_template.gpio.find(gpio => ((gpio & mask) === real_gpio))
+        if (config) {
+          if (config.friendlyname && (config.friendlyname.length > 0)) $('#node-config-input-friendlynames').val(config.friendlyname.join(','))
+          if (config.mqtt_host && brokerNodes[config.mqtt_host] && (this.broker !== brokerNodes[config.mqtt_host].id)) {
+            $('#node-config-input-broker').val(brokerNodes[config.mqtt_host]?.id || '_ADD_')
           }
-          for (let idx = MAX_RELAYS - 1; idx >= 0; idx--) {
-            if (pinUsed(GPIO_REL1, idx) || pinUsed(GPIO_REL1_INV, idx)
-              || pinUsed(GPIO_REL1_BI, idx) || pinUsed(GPIO_REL1_BI_INV, idx)) {
-                $('#node-config-input-relais').val(idx + 1)
-                break
-              }
-          }
-        }
 
-        // Tab MQTT
-        if (config.mqtt_fulltopic) $('#node-config-input-fullTopic').val(config.mqtt_fulltopic)
-        if (config.mqtt_prefix) {
-          if (config.mqtt_prefix[0]) $('#node-config-input-cmndPrefix').val(config.mqtt_prefix[0])
-          if (config.mqtt_prefix[1]) $('#node-config-input-statPrefix').val(config.mqtt_prefix[1])
-          if (config.mqtt_prefix[2]) $('#node-config-input-telePrefix').val(config.mqtt_prefix[2])
+          // Tab Advanced
+          if (config.ip_address) $('#node-config-input-ip').text(config.ip_address[0])
+          if (config.ip_address) $("#node-config-input-ip").attr("href", config.ip_address[0] && ("http://" + config.ip_address[0]) || '')
+          if (config.hostname) $('#node-config-input-host').val(config.hostname)
+          if (config.version) $('#node-config-input-version').val(config.version)
+          //?? config.ntp_server
+          //?? config.ota_url
+          //?? config.pulse_timer
+          //?? config.timer
+
+          if (config.module) $('#node-config-input-module').val(config.module)
+          if (config.module === 255) {
+            const GPIO_REL1 = 7
+            const GPIO_REL1_INV = 8
+            const GPIO_REL1_BI = 271
+            const GPIO_REL1_BI_INV = 272
+            const GPIO_ANY = 32
+            const MAX_RELAYS = 8 // 28 for ESP32
+
+            const pinUsed = (gpio, index) => {
+              if (!config.user_template || !config.user_template.gpio) return
+              const gpio_any = (index >= GPIO_ANY)
+              const real_gpio = (gpio << 5) + gpio_any && index || 0
+              const mask = gpio_any && 0xFFE0 || 0xFFFF
+              return config.user_template.gpio.find(gpio => ((gpio & mask) === real_gpio))
+            }
+            for (let idx = MAX_RELAYS - 1; idx >= 0; idx--) {
+              if (pinUsed(GPIO_REL1, idx) || pinUsed(GPIO_REL1_INV, idx)
+                || pinUsed(GPIO_REL1_BI, idx) || pinUsed(GPIO_REL1_BI_INV, idx)) {
+                  $('#node-config-input-relais').val(idx + 1)
+                  break
+                }
+            }
+          }
+
+          // Tab MQTT
+          if (config.mqtt_fulltopic) $('#node-config-input-fullTopic').val(config.mqtt_fulltopic)
+          if (config.mqtt_prefix) {
+            if (config.mqtt_prefix[0]) $('#node-config-input-cmndPrefix').val(config.mqtt_prefix[0])
+            if (config.mqtt_prefix[1]) $('#node-config-input-statPrefix').val(config.mqtt_prefix[1])
+            if (config.mqtt_prefix[2]) $('#node-config-input-telePrefix').val(config.mqtt_prefix[2])
+          }
         }
 
         $('#list-avail-devices').html('')
         const rlist = []
         if (device) rlist.push(`<option value="${device}"></option>`)
-        mqttMap = getMqttMap()
+        const mqttMap = getMqttMap()
         const deviceNodes = {}
         RED.nodes.eachConfig(n => { if (n.type === 'tasmota-device') deviceNodes[n.device] = n })
         for (let ip in mqttMap) {
@@ -321,6 +326,7 @@
       }
 
       $("#node-config-input-device").on("change", updateDevice)
+      if (!this.device) updateDevice()
     }
   })
   

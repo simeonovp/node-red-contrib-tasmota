@@ -1,7 +1,7 @@
 {
   "name": "node-red-contrib-tasmota",
   "description": "Node-RED integration for Tasmota flashed devices",
-  "version": "2.0.3",
+  "version": "2.0.4",
   "license": "MIT",
   "author": "Dave Andreoli, Peter Simeonov",
   "keywords": [
@@ -24,11 +24,6 @@
   "node-red": {
     "nodes": {
       "tasmota-mqtt-broker": "nodes/mqtt_broker.js",
-      "Tasmota switch": "nodes/switch.js",
-      "Tasmota sensor": "nodes/sensor.js",
-      "Tasmota light": "nodes/light.js",
-      "Tasmota button": "nodes/button.js",
-      "Tasmota generic": "nodes/generic.js",
       "tasmota-device": "nodes/tasmota_device.js",
       "Tasmota Switch": "nodes/tasmota_switch.js",
       "Tasmota Shutter": "nodes/tasmota_shutter.js",

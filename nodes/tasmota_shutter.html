@@ -27,16 +27,13 @@
             Send enable/disable message
         </label>
     </div>
-
     <hr>
-
     <div class="form-row">
         <label for="node-input-sendDevice" style="width:70%">
             <input type="checkbox" id="node-input-sendDevice" style="display:inline-block; width:15px; vertical-align:baseline;">
             Send device name
         </label>
     </div>
-    
     <div class="form-row">
         <label for="node-input-swapSwitches" style="width:70%">
             <input type="checkbox" id="node-input-swapSwitches" style="display:inline-block; width:15px; vertical-align:baseline;">
@@ -104,15 +101,16 @@
     inputs: 1,
     outputs: 1,
     label: function() {
-      return this.name || "Tasmota Shutter"
+      return this.name || (RED.nodes.node(this.device) && (`${RED.nodes.node(this.device).device}_${parseInt(this.idx) + 1}`)) || "Tasmota Shutter"
     },
     labelStyle: function() {
       return this.name ? "node_label_italic" : ""
     },
     oneditprepare: function () {
+      if (!this.device) $('#node-input-device').val('_ADD_')
       if (!this.idx) $("#node-input-idx").val("0")
       const updateName = () => {
-        if (!this.name) $('#node-input-name').val($('#node-input-device option:selected').text() + '_' + $('#node-input-idx option:selected').text())
+        $('#node-input-name').attr('placeholder', $('#node-input-device option:selected').text() + '_' + $('#node-input-idx option:selected').text())
       }
       updateName()
       $("#node-input-device").on("change", updateName)

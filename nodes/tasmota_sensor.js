@@ -13,6 +13,12 @@ module.exports = function (RED) {
 
       // Subscribe to device telemetry changes  tele/<device>/SENSOR
       this.MQTTSubscribe('tele', 'SENSOR', (topic, payload) => {
+        //tasmota/sc_01/tele/SENSOR = {"Time":"2023-01-08T07:20:34","SonoffSC":{"Temperature":23.0,"Humidity":44.0,"DewPoint":10.1,"Light":10,"Noise":40,"AirQuality":90},"TempUnit":"C"}
+        this.onSensorTelemetry(topic, payload)
+      })
+
+      this.MQTTSubscribe('tele', 'RESULT', (topic, payload) => {
+        //tasmota/sc_01/tele/SENSOR = {"Time":"2023-01-08T07:20:34","SonoffSC":{"Temperature":23.0,"Humidity":44.0,"DewPoint":10.1,"Light":10,"Noise":40,"AirQuality":90},"TempUnit":"C"}
         this.onSensorTelemetry(topic, payload)
       })
 
@@ -36,7 +42,7 @@ module.exports = function (RED) {
       const topic = this.config.outputTopic ? this.config.outputTopic : undefined
 
       if (!this.config.rules || !this.config.rules.length) {
-        this.send({ topic: topic, payload: tasmotaData })
+        this.onSend({ topic: topic, payload: tasmotaData })
         return
       }
 

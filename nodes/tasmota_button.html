@@ -20,6 +20,13 @@
         <label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
         <input type="text" id="node-input-name" placeholder="Name">
     </div>
+    <hr>
+    <div class="form-row">
+        <label for="node-input-sendDevice" style="width:70%">
+            <input type="checkbox" id="node-input-sendDevice" style="display:inline-block; width:15px; vertical-align:baseline;">
+            Send device name
+        </label>
+    </div>
     <!--
     <div class="form-row">
         <label for="node-input-uidisabler"><i class="fa fa-bar-chart"></i> Dashboard</label>
@@ -64,6 +71,7 @@
       device: { type: "tasmota-device", required: true },
       name: { value: "" },
       outputs: { value: 1 },
+      sendDevice: { value: true },
       uidisabler: { value: false },
       // node specific
       idx: { value: "0" },
@@ -73,15 +81,16 @@
     inputs: 0,
     outputs: 1,
     label: function() {
-      return this.name || "Tasmota Button"
+      return this.name || RED.nodes.node(this.device)?.device || "Tasmota Button"
     },
     labelStyle: function() {
       return this.name ? "node_label_italic" : ""
     },
     oneditprepare: function () {
-      if (!this.name) $('#node-input-name').val($('#node-input-device option:selected').text())
+      if (!this.device) $('#node-input-device').val('_ADD_')
+      $('#node-input-name').attr('placeholder', $('#node-input-device option:selected').text())
       $("#node-input-device").on("change", function() {
-        if (!this.name) $('#node-input-name').val($('#node-input-device option:selected').text())
+        $('#node-input-name').attr('placeholder', $('#node-input-device option:selected').text())
       })
     },
     button: {

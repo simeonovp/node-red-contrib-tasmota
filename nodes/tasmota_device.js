@@ -19,6 +19,7 @@ module.exports = function (RED) {
     version: 1,
     module: 0,
     relais: 0,
+    friendlynames: '',
     // advanced
     fullTopic: 'tasmota/%topic%/%prefix%', // '%prefix%/%topic%/',
     cmndPrefix: 'cmnd',
@@ -238,6 +239,8 @@ module.exports = function (RED) {
     }
   }
 
+  //SonoffSC: {"Temperature":24,"Humidity":43,"DewPoint":10.6,"Light":10,"Noise":40,"AirQuality":90}
+
   class TasmotaDevice {
     constructor (config) {
       RED.nodes.createNode(this, config)
@@ -250,6 +253,7 @@ module.exports = function (RED) {
       this.statSubscriptions = null
       this.teleSubscriptions = null
       this.polling = 1
+      this.deviceConfig = null
 
       // LastWillTopic status of the device
       this.isOnline = false
@@ -300,18 +304,18 @@ module.exports = function (RED) {
       })
     }
 
-    downloadConfig(force = false) {
-      //sip TODO
+    async downloadConfig(force = false) {
       //.node-red\projects\node-red-contrib-tasmota\resources\configs
-      // const configDir = path.resolve(path.join(__dirname, '../resources/configs'))
-      // const helper = new TasmotaConfig(this, configDir)
-      // helper.downloadConfig(this.config.ip, this.config.device + '.json', force, err => {
-      //   if (!err) {
-      //   //   const config = helper.getConfg(ip)
-      //   //   this.log(JSON.stringify(config, null, 2))
-      //     if (this.manager) this.MQTTPublish('cmnd', 'STATUS', '11')
-      //   }
-      // })
+      if (!this.manager || !this.config.ip) return
+      this.deviceConfig = await this.manager.downloadConfig(this.config.ip, force)
+      if (!this.deviceConfig) return
+      if (this.deviceConfig.mqtt_host !== this.brokerNode?.config.broker) {
+        this.warn(`Force download device config due to different MQTT broker (${this.deviceConfig.mqtt_host} != ${this.brokerNode?.config.broker})`)
+        this.deviceConfig = await this.manager.downloadConfig(this.config.ip, true)
+        if (!this.deviceConfig) return
+      }
+
+      this.MQTTPublish('cmnd', 'STATUS', '11')
     }
 
     status0() {
@@ -378,7 +382,7 @@ module.exports = function (RED) {
 
       // Subscribe to device availability changes  tele/<device>/LWT
       this.MQTTSubscribe(this, 'tele', 'LWT', (topic, payload) => {
-        this.isOnline = (payload.toString() === 'Online')
+        this.isOnline = (payload.toString().startsWith('Online'))
         if (this.isOnline) {
           this.onDeviceOnline()
         } else {
@@ -412,7 +416,7 @@ module.exports = function (RED) {
       }
 
       //set cached LWT
-      if (this.isOnline) tasmotaNode.onDeviceOnline()
+      //-- if (this.isOnline) tasmotaNode.onDeviceOnline()
     }
 
     /* DeRegister a previously registered TasmotaNode */
@@ -470,6 +474,9 @@ module.exports = function (RED) {
         this._fireMqttMessage(topic, payload, packet, command, this.subGroups.tele.subscriptions);
       }
       else {
+        //regiter tele subGroup on demand
+        if (!this.subGroups.cmnd && topic.includes(this.config.cmndPrefix)) return this.MQTTSubscribe(this, 'cmnd', 'STATUS')
+        if (!this.subGroups.tele && topic.includes(this.config.telePrefix)) return this.MQTTSubscribe(this, 'tele')
         this.warn(`_onMqttMessage topic:${topic}, subGroups:${JSON.stringify(this.subGroups)}`)
       }
     }
@@ -542,6 +549,7 @@ module.exports = function (RED) {
       
       const topic = this.buildFullTopic(prefix, '')
       this.subGroups[prefix] = this.subGroups[prefix] || { topic, subscriptions: {} }
+      if (!command || !callback) return
     
       let subscriptions = this.subGroups[prefix].subscriptions
       subscriptions[command] = subscriptions[command] || {}
@@ -685,7 +693,7 @@ module.exports = function (RED) {
 
       this.initialize(true)
       
-      if (!fs.existsSync(this.mqttMapPath)) downloadAllConfigs()
+      if (!fs.existsSync(this.mqttMapPath)) this.downloadAllConfigs()
     }
 
     get devices() {  return this.devicesDb.data }
@@ -735,7 +743,7 @@ module.exports = function (RED) {
     }
 
     _spawnDecodeConfig(params) {
-      return new Promise((resolve, reject) => { 
+      return new Promise((resolve, reject) => {
         const pythonProcess = spawn('python', [this.confdir + '/decode-config.py', ...params])
         pythonProcess.stdout.on('data', (data) => this.log(data))
         pythonProcess.stderr.on('data', (data) => this.warn(data))
@@ -744,7 +752,10 @@ module.exports = function (RED) {
     }
     
     async downloadConfig(ip, force = false) {
-      const filepath = path.join(this.confdir, ip + '.json')
+      if (!this.mqttMap) this.loadMqttMap()
+      const mqtt_topic = this.mqttMap && this.mqttMap[ip]
+      const filepath = path.join(this.confdir, (mqtt_topic || ip) + '.json')
+
       try {
         if (force || !fs.existsSync(filepath)) {
           const err = await this._spawnDecodeConfig([
@@ -760,16 +771,20 @@ module.exports = function (RED) {
       }
     
       const config = JSON.parse(fs.readFileSync(filepath, 'utf8'));
-      const mqtt_topic = config?.mqtt_topic
-      if (mqtt_topic) {
-        fs.renameSync(filepath, path.join(this.confdir, mqtt_topic + '.json'))
-        if (this.mqttMap) this.mqttMap[ip] = mqtt_topic
+      if (!mqtt_topic && config?.mqtt_topic) {
+        fs.renameSync(filepath, path.join(this.confdir, config.mqtt_topic + '.json'))
+        if (this.mqttMap) {
+          this.mqttMap[ip] = config.mqtt_topic
+          const sorted = Object.keys(this.mqttMap).sort().reduce((acc, key) => ({...acc, [key]: this.mqttMap[key]}), {})
+          this.mqttMap = sorted
+          fs.createWriteStream(this.mqttMapPath).write(JSON.stringify(this.mqttMap, null, 2));
+        }
       }
+      return config
     }
 
     async downloadAllConfigs(force = false) {
       if (!this.mqttMap) this.loadMqttMap()
-      let mapDirty = false
 
       //TODO iterate all tasmota devices
       const devices = this.devicesDb && this.devicesDb.getTable('devices') || []
@@ -777,7 +792,6 @@ module.exports = function (RED) {
         if (device.fw && device.ip) {
           const mqtt_topic = this.mqttMap[device.ip]
           if (!mqtt_topic || !fs.existsSync(path.join(this.confdir, mqtt_topic + '.json'))) {
-            mapDirty = true
             try {
               this.mqttMap[device.ip] = ''
               await this.downloadConfig(device.ip)
@@ -788,10 +802,6 @@ module.exports = function (RED) {
           }
         }
       }
-
-      const sorted = Object.keys(this.mqttMap).sort().reduce((acc, key) => ({...acc, [key]: this.mqttMap[key]}), {})
-      this.mqttMap = sorted
-      if (mapDirty) fs.createWriteStream(this.mqttMapPath).write(JSON.stringify(this.mqttMap, null, 2));
     }
 
     registerDevice(device) {
